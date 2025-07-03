@@ -84,7 +84,7 @@ static SyslogWindow *syslogWindow = nil;
 static BOOL isWindowEnabled = YES;
 
 static void loadPreferences() {
-    NSDictionary *prefs = [NSDictionary dictionaryWithContentsOfFile:@"/var/mobile/Library/Preferences/com.yourname.syslogviewer.plist"];
+    NSDictionary *prefs = [NSDictionary dictionaryWithContentsOfFile:@"/var/mobile/Library/Preferences/com.anonymousx.syslogviewer.plist"];
     isWindowEnabled = prefs[@"enabled"] ? [prefs[@"enabled"] boolValue] : YES;
     
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -117,5 +117,5 @@ static void loadPreferences() {
 
 %ctor {
     %init;
-    CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), NULL, (CFNotificationCallback)loadPreferences, CFSTR("com.yourname.syslogviewer.prefschanged"), NULL, CFNotificationSuspensionBehaviorDeliverImmediately);
+    CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), NULL, (CFNotificationCallback)loadPreferences, CFSTR("com.anonymousx.syslogviewer.prefschanged"), NULL, CFNotificationSuspensionBehaviorDeliverImmediately);
 }
