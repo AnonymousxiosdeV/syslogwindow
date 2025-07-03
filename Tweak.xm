@@ -84,7 +84,7 @@ static SyslogWindow *syslogWindow = nil;
 static BOOL isWindowEnabled = YES;
 
 static void loadPreferences() {
-    NSDictionary *prefs = [NSDictionary dictionaryWithContentsOfFile:@"/var/mobile/Library/Preferences/com.anonymousx.syslogviewer.plist"];
+    NSDictionary *prefs = [NSDictionary dictionaryWithContentsOfFile:@"/var/jb/var/mobile/Library/Preferences/com.anonymousx.syslogviewer.plist"];
     isWindowEnabled = prefs[@"enabled"] ? [prefs[@"enabled"] boolValue] : YES;
     
     dispatch_async(dispatch_get_main_queue(), ^{
