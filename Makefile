@@ -8,9 +8,9 @@ include $(THEOS)/makefiles/common.mk
 TWEAK_NAME = SyslogViewer
 SyslogViewer_FILES = Tweak.xm
 SyslogViewer_FRAMEWORKS = UIKit Foundation
-SyslogViewer_PRIVATE_FRAMEWORKS = LoggingSupport Preferences
+SyslogViewer_PRIVATE_FRAMEWORKS = Preferences
 SyslogViewer_LIBRARIES = substrate
-SyslogViewer_CFLAGS = -fobjc-arc
+SyslogViewer_CFLAGS = -fobjc-arc -I$(THEOS)/sdks/iPhoneOS15.6.sdk/usr/include
 
 include $(THEOS)/makefiles/tweak.mk
 

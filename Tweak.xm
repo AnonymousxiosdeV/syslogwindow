@@ -1,6 +1,6 @@
 #import <UIKit/UIKit.h>
 #import <Foundation/Foundation.h>
-#import <LoggingSupport/OSLog.h>
+#import <os/log.h>
 #import <Preferences/PSSpecifier.h>
 #import <substrate.h>
 
@@ -84,7 +84,7 @@ static SyslogWindow *syslogWindow = nil;
 static BOOL isWindowEnabled = YES;
 
 static void loadPreferences() {
-    NSDictionary *prefs = [NSDictionary dictionaryWithContentsOfFile:@"/var/jb/var/mobile/Library/Preferences/com.anonymousx.syslogviewer.plist"];
+    NSDictionary *prefs = [NSDictionary dictionaryWithContentsOfFile:@"/var/jb/var/mobile/Library/Preferences/com.yourname.syslogviewer.plist"];
     isWindowEnabled = prefs[@"enabled"] ? [prefs[@"enabled"] boolValue] : YES;
     
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -99,23 +99,42 @@ static void loadPreferences() {
     });
 }
 
+%hook NSLog
+void NSLog(NSString *format, ...) {
+    va_list args;
+    va_start(args, format);
+    NSString *message = [[NSString alloc] initWithFormat:format arguments:args];
+    va_end(args);
+    if (isWindowEnabled) {
+        [syslogWindow appendLog:message];
+    }
+}
+%end
+
 %hook SpringBoard
 - (void)applicationDidFinishLaunching:(id)application {
     %orig;
     loadPreferences();
+    
+    // Start socat for syslog capture
+    NSTask *task = [[NSTask alloc] init];
+    task.launchPath = @"/var/jb/usr/bin/socat";
+    task.arguments = @[@"-u", @"UNIX-CONNECT:/var/jb/var/run/lockdown/syslog.sock", @"STDOUT"];
+    task.standardOutput = [NSPipe pipe];
+    [[task.standardOutput fileHandleForReading] readInBackgroundAndNotify];
+    [[NSNotificationCenter defaultCenter] addObserverForName:NSFileHandleReadCompletionNotification object:[task.standardOutput fileHandleForReading] queue:nil usingBlock:^(NSNotification *note) {
+        NSData *data = note.userInfo[NSFileHandleNotificationDataItem];
+        if (data.length && isWindowEnabled) {
+            NSString *log = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+            [syslogWindow appendLog:log];
+        }
+        [[task.standardOutput fileHandleForReading] readInBackgroundAndNotify];
+    }];
+    [task launch];
 }
 %end
 
-%hookf(void, os_log_impl, void *bundle, void *category, uint8_t type, const char *format, va_list args) {
-    %orig;
-    if (!isWindowEnabled) return;
-    char buffer[1024];
-    vsnprintf(buffer, sizeof(buffer), format, args);
-    NSString *logMessage = @(buffer);
-    [syslogWindow appendLog:logMessage];
-}
-
 %ctor {
-    %init;
-    CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), NULL, (CFNotificationCallback)loadPreferences, CFSTR("com.anonymousx.syslogviewer.prefschanged"), NULL, CFNotificationSuspensionBehaviorDeliverImmediately);
+    %init(NSLog=NSLog);
+    CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), NULL, (CFNotificationCallback)loadPreferences, CFSTR("com.yourname.syslogviewer.prefschanged"), NULL, CFNotificationSuspensionBehaviorDeliverImmediately);
 }
