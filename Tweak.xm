@@ -99,18 +99,10 @@ static void loadPreferences() {
     });
 }
 
-// Custom NSLog interceptor using dlsym (avoid %hook redefinition)
-static void (*original_NSLog)(NSString *, ...);
-static void custom_NSLog(NSString *format, ...) {
-    va_list args;
-    va_start(args, format);
-    NSString *message = [[NSString alloc] initWithFormat:format arguments:args];
-    va_end(args);
+// Custom log capture using os_log (simplified)
+static void captureLog(NSString *message) {
     if (isWindowEnabled && syslogWindow) {
         [syslogWindow appendLog:message];
-    }
-    if (original_NSLog) {
-        original_NSLog(format, args);
     }
 }
 
@@ -133,15 +125,9 @@ static void custom_NSLog(NSString *format, ...) {
         [[NSFileHandle fileHandleForReadingAtPath:@"/var/jb/tmp/syslogpipe"] readInBackgroundAndNotify];
     }];
 
-    // Intercept NSLog
-    void *handle = dlopen("/System/Library/Frameworks/Foundation.framework/Foundation", RTLD_LAZY);
-    if (handle) {
-        original_NSLog = dlsym(handle, "NSLog");
-        if (original_NSLog) {
-            MSHookFunction((void *)original_NSLog, (void *)custom_NSLog, (void **)&original_NSLog);
-        }
-        dlclose(handle);
-    }
+    // Simplified log capture (fallback)
+    os_log_with_type(OS_LOG_DEFAULT, OS_LOG_TYPE_DEFAULT, "%{public}@ test log", @"Test");
+    // Note: Direct os_log hooking is complex; rely on socat for now
 }
 %end
 
