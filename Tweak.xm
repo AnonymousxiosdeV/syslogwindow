@@ -99,42 +99,53 @@ static void loadPreferences() {
     });
 }
 
-%hook NSLog
-void NSLog(NSString *format, ...) {
+// Custom NSLog interceptor using dlsym (avoid %hook redefinition)
+static void (*original_NSLog)(NSString *, ...);
+static void custom_NSLog(NSString *format, ...) {
     va_list args;
     va_start(args, format);
     NSString *message = [[NSString alloc] initWithFormat:format arguments:args];
     va_end(args);
-    if (isWindowEnabled) {
+    if (isWindowEnabled && syslogWindow) {
         [syslogWindow appendLog:message];
+    }
+    if (original_NSLog) {
+        original_NSLog(format, args);
+    }
+}
+
+%hook SpringBoard
+- (void)applicationDidFinishLaunching:(id)app {
+    %orig;
+    loadPreferences();
+
+    // Start socat for syslog capture
+    system("socat -u UNIX-CONNECT:/var/jb/var/run/lockdown/syslog.sock STDOUT | while read line; do echo \"$line\" > /var/jb/tmp/syslogpipe; done &");
+    [[NSFileHandle fileHandleForReadingAtPath:@"/var/jb/tmp/syslogpipe"] readInBackgroundAndNotify];
+    [[NSNotificationCenter defaultCenter] addObserverForName:NSFileHandleReadCompletionNotification object:[NSFileHandle fileHandleForReadingAtPath:@"/var/jb/tmp/syslogpipe"] queue:nil usingBlock:^(NSNotification *note) {
+        if (isWindowEnabled) {
+            NSData *data = note.userInfo[NSFileHandleNotificationDataItem];
+            if (data.length) {
+                NSString *log = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+                [syslogWindow appendLog:log];
+            }
+        }
+        [[NSFileHandle fileHandleForReadingAtPath:@"/var/jb/tmp/syslogpipe"] readInBackgroundAndNotify];
+    }];
+
+    // Intercept NSLog
+    void *handle = dlopen("/System/Library/Frameworks/Foundation.framework/Foundation", RTLD_LAZY);
+    if (handle) {
+        original_NSLog = dlsym(handle, "NSLog");
+        if (original_NSLog) {
+            MSHookFunction((void *)original_NSLog, (void *)custom_NSLog, (void **)&original_NSLog);
+        }
+        dlclose(handle);
     }
 }
 %end
 
-%hook SpringBoard
-- (void)applicationDidFinishLaunching:(id)application {
-    %orig;
-    loadPreferences();
-    
-    // Start socat for syslog capture
-    NSTask *task = [[NSTask alloc] init];
-    task.launchPath = @"/var/jb/usr/bin/socat";
-    task.arguments = @[@"-u", @"UNIX-CONNECT:/var/jb/var/run/lockdown/syslog.sock", @"STDOUT"];
-    task.standardOutput = [NSPipe pipe];
-    [[task.standardOutput fileHandleForReading] readInBackgroundAndNotify];
-    [[NSNotificationCenter defaultCenter] addObserverForName:NSFileHandleReadCompletionNotification object:[task.standardOutput fileHandleForReading] queue:nil usingBlock:^(NSNotification *note) {
-        NSData *data = note.userInfo[NSFileHandleNotificationDataItem];
-        if (data.length && isWindowEnabled) {
-            NSString *log = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-            [syslogWindow appendLog:log];
-        }
-        [[task.standardOutput fileHandleForReading] readInBackgroundAndNotify];
-    }];
-    [task launch];
-}
-%end
-
 %ctor {
-    %init(NSLog=NSLog);
+    %init;
     CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), NULL, (CFNotificationCallback)loadPreferences, CFSTR("com.yourname.syslogviewer.prefschanged"), NULL, CFNotificationSuspensionBehaviorDeliverImmediately);
 }
