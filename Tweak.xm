@@ -99,10 +99,18 @@ static void loadPreferences() {
     });
 }
 
-// Custom log capture using os_log (simplified)
-static void captureLog(NSString *message) {
+// Custom NSLog interceptor
+static void (*original_NSLog)(NSString *, ...);
+static void custom_NSLog(NSString *format, ...) {
+    va_list args;
+    va_start(args, format);
+    NSString *message = [[NSString alloc] initWithFormat:format arguments:args];
+    va_end(args);
     if (isWindowEnabled && syslogWindow) {
         [syslogWindow appendLog:message];
+    }
+    if (original_NSLog) {
+        original_NSLog(format, args);
     }
 }
 
@@ -111,23 +119,15 @@ static void captureLog(NSString *message) {
     %orig;
     loadPreferences();
 
-    // Start socat for syslog capture
-    system("socat -u UNIX-CONNECT:/var/jb/var/run/lockdown/syslog.sock STDOUT | while read line; do echo \"$line\" > /var/jb/tmp/syslogpipe; done &");
-    [[NSFileHandle fileHandleForReadingAtPath:@"/var/jb/tmp/syslogpipe"] readInBackgroundAndNotify];
-    [[NSNotificationCenter defaultCenter] addObserverForName:NSFileHandleReadCompletionNotification object:[NSFileHandle fileHandleForReadingAtPath:@"/var/jb/tmp/syslogpipe"] queue:nil usingBlock:^(NSNotification *note) {
-        if (isWindowEnabled) {
-            NSData *data = note.userInfo[NSFileHandleNotificationDataItem];
-            if (data.length) {
-                NSString *log = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-                [syslogWindow appendLog:log];
-            }
+    // Intercept NSLog
+    void *handle = dlopen("/System/Library/Frameworks/Foundation.framework/Foundation", RTLD_LAZY);
+    if (handle) {
+        original_NSLog = dlsym(handle, "NSLog");
+        if (original_NSLog) {
+            MSHookFunction((void *)original_NSLog, (void *)custom_NSLog, (void **)&original_NSLog);
         }
-        [[NSFileHandle fileHandleForReadingAtPath:@"/var/jb/tmp/syslogpipe"] readInBackgroundAndNotify];
-    }];
-
-    // Simplified log capture (fallback)
-    os_log_with_type(OS_LOG_DEFAULT, OS_LOG_TYPE_DEFAULT, "%{public}@ test log", @"Test");
-    // Note: Direct os_log hooking is complex; rely on socat for now
+        dlclose(handle);
+    }
 }
 %end
 
