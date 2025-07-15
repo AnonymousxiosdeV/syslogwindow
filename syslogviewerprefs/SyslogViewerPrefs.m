@@ -7,26 +7,23 @@
 @implementation SyslogViewerPrefs
 - (NSArray *)specifiers {
     if (!_specifiers) {
-        NSMutableArray *specifiers = [NSMutableArray array];
-        
-        PSSpecifier *toggle = [PSSpecifier preferenceSpecifierNamed:@"Enable Window" target:self set:@selector(setPreferenceValue:specifier:) get:@selector(readPreferenceValue:) type:PSSpecifierTypeToggleSwitch key:@"enabled"];
-        [specifiers addObject:toggle];
-        
-        _specifiers = specifiers;
+        _specifiers = [self loadSpecifiersFromPlistName:@"Root" target:self];
     }
     return _specifiers;
 }
 
 - (id)readPreferenceValue:(PSSpecifier *)specifier {
-    NSDictionary *prefs = [NSDictionary dictionaryWithContentsOfFile:@"/var/jb/var/mobile/Library/Preferences/com.anonymousx.syslogviewer.plist"];
-    return prefs[[specifier propertyForKey:@"key"]] ?: @(YES);
+    NSString *path = [NSString stringWithFormat:@"/var/jb/var/mobile/Library/Preferences/%@.plist", [specifier.properties objectForKey:@"defaults"]];
+    NSDictionary *prefs = [NSDictionary dictionaryWithContentsOfFile:path];
+    return prefs[[specifier propertyForKey:@"key"]] ?: [specifier propertyForKey:@"default"];
 }
 
 - (void)setPreferenceValue:(id)value specifier:(PSSpecifier *)specifier {
-    NSMutableDictionary *prefs = [NSMutableDictionary dictionaryWithContentsOfFile:@"/var/jb/var/mobile/Library/Preferences/com.anonymousx.syslogviewer.plist"] ?: [NSMutableDictionary dictionary];
-    prefs[[specifier propertyForKey:@"key"]] = value;
-    [prefs writeToFile:@"/var/jb/var/mobile/Library/Preferences/com.anonymousx.syslogviewer.plist" atomically:YES];
+    NSString *path = [NSString stringWithFormat:@"/var/jb/var/mobile/Library/Preferences/%@.plist", [specifier.properties objectForKey:@"defaults"]];
+    NSMutableDictionary *prefs = [NSMutableDictionary dictionaryWithContentsOfFile:path] ?: [NSMutableDictionary dictionary];
+    [prefs setObject:value forKey:[specifier propertyForKey:@"key"]];
+    [prefs writeToFile:path atomically:YES];
     
-    CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), CFSTR("com.anonymousx.syslogviewer.prefschanged"), NULL, NULL, YES);
+    CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), (__bridge CFStringRef)[specifier.properties objectForKey:@"PostNotification"], NULL, NULL, YES);
 }
 @end
