@@ -1,8 +1,6 @@
 #import <UIKit/UIKit.h>
 #import <Foundation/Foundation.h>
 #import <os/log.h>
-#import <mach-o/dyld.h>
-#import <dlfcn.h>
 #import <substrate.h>
 
 @interface SyslogWindow : UIWindow
@@ -126,7 +124,6 @@
 
 static SyslogWindow *syslogWindow = nil;
 static BOOL isWindowEnabled = YES;
-static os_log_t custom_log;
 
 static void loadPreferences() {
     NSDictionary *prefs = [NSDictionary dictionaryWithContentsOfFile:@"/var/jb/var/mobile/Library/Preferences/com.anonymousx.syslogviewer.plist"];

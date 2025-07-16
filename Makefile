@@ -10,7 +10,7 @@ SyslogViewer_FILES = Tweak.xm
 SyslogViewer_FRAMEWORKS = UIKit Foundation
 SyslogViewer_PRIVATE_FRAMEWORKS = Preferences
 SyslogViewer_LIBRARIES = substrate
-SyslogViewer_CFLAGS = -fobjc-arc -I$(THEOS)/sdks/iPhoneOS15.6.sdk/usr/include
+SyslogViewer_CFLAGS = -fobjc-arc
 
 include $(THEOS)/makefiles/tweak.mk
 
