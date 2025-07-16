@@ -145,28 +145,16 @@ static void loadPreferences() {
 }
 
 static void start_log_capture() {
-    void *handle = dlopen("/usr/lib/liboslog.dylib", RTLD_LAZY);
-    if (handle) {
-        // Define the block type
-        typedef void (^os_log_callback_t)(os_log_type_t type, const char *message, void *ctx);
-
-        // Get the function pointer
-        void (*os_log_add_callback)(os_log_t, os_log_callback_t, void *) = dlsym(handle, "os_log_add_callback");
-
-        if (os_log_add_callback) {
-            custom_log = os_log_create("com.anonymousx.syslogviewer", "default");
-
-            // Define the callback block
-            os_log_callback_t callback = ^(os_log_type_t type, const char *message, void *ctx) {
-                if (isWindowEnabled && syslogWindow) {
-                    [syslogWindow appendLog:[NSString stringWithUTF8String:message]];
-                }
-            };
-
-            os_log_add_callback(custom_log, callback, NULL);
+    os_log_stream_t stream = os_log_stream_create(NULL, OS_LOG_STREAM_DEFAULT);
+    os_log_stream_set_event_handler(stream, ^(os_log_message_t message) {
+        if (isWindowEnabled && syslogWindow) {
+            const char *msg = os_log_message_get_message(message);
+            if (msg) {
+                [syslogWindow appendLog:[NSString stringWithUTF8String:msg]];
+            }
         }
-        dlclose(handle);
-    }
+    });
+    os_log_stream_activate(stream);
 }
 
 %ctor {
